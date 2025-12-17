@@ -86,9 +86,9 @@ def _pick_current_channel(
     adc_infos: Sequence[ChannelInfo], preferred: Optional[int]
 ) -> ChannelInfo:
     """Returns the preferred current channel when the user already knows
-    the current channel. If no channel index is provided, it heurestically
+    the current channel index. If no channel index is provided, it heurestically
     selects a channel that has units in ampere (a). If it still cannot find
-    such channel, it just returns the first channe."""
+    such channel, it just returns the first channel."""
 
     if not adc_infos:
         raise ABFLoadError("No ADC channels found.")
@@ -108,3 +108,30 @@ def _pick_current_channel(
 
     # fallback: first channel
     return adc_infos[0]
+
+
+def _pick_command_channel(
+    dac_infos: Sequence[ChannelInfo], preferred: Optional[int]
+) -> Optional[ChannelInfo]:
+    """Returns the preferred voltage channel when the user already knows
+    the voltage channel index. If no channel index is provided, it heurestically
+    selects a channel that has units in volt (v). If it still cannot find
+    such channel, it just returns the first channel."""
+    if not dac_infos:
+        return None
+
+    if preferred is not None:
+        if preferred < 0 or preferred >= len(dac_infos):
+            raise ABFLoadError(
+                f"Preferred command_channel={preferred} is out of range."
+            )
+        return dac_infos[preferred]
+
+    # Heuristic: look for mV/V units
+    voltish_units = {"mv", "v"}
+    for ch in dac_infos:
+        if ch.units.strip().lower() in voltish_units:
+            return ch
+
+    # fallback: first channel
+    return dac_infos[0]

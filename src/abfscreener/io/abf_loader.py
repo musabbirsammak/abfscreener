@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
 import pyabf
+from utils.strings import _safe_str
 
 
 class ABFLoadError(RuntimeError):
@@ -42,3 +43,21 @@ class ABFSession:
 
     # any other metadata that user thinks might be useful
     meta: Dict[str, Any]
+
+
+def _get_adc_channels(abf: pyabf.ABF) -> Sequence[ChannelInfo]:
+    """adc channels mean the signals that were actually measured by the
+    instrument, for example, current, voltage, auxiliary inputs, etc."""
+
+    infos: list[ChannelInfo] = []
+
+    # pyabf stores ADC channel names/units in lists
+    names = getattr(abf, "adcNames", None) or []
+    units = getattr(abf, "adcUnits", None) or []
+
+    for i in range(len(names)):
+        infos.append(
+            ChannelInfo(index=i, name=_safe_str(names[i]), units=_safe_str(units[i]))
+        )
+
+    return infos

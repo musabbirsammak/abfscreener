@@ -61,3 +61,20 @@ def _get_adc_channels(abf: pyabf.ABF) -> Sequence[ChannelInfo]:
         )
 
     return infos
+
+
+def _get_dac_channels(abf: pyabf.ABF) -> Sequence[ChannelInfo]:
+    """dac is what the amplifier outputs, not what it measures, for example, command
+    voltage, injected currents, stimulus waveforms, etc."""
+
+    infos: list[ChannelInfo] = []
+
+    names = getattr(abf, "dacNames", None) or []
+    units = getattr(abf, "dacUnits", None) or []
+
+    for i in range(len(names)):
+        infos.append(
+            ChannelInfo(index=i, name=_safe_str(names[i]), units=_safe_str(units[i]))
+        )
+
+    return infos

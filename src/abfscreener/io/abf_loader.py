@@ -46,8 +46,9 @@ class ABFSession:
 
 
 def _get_adc_channels(abf: pyabf.ABF) -> Sequence[ChannelInfo]:
-    """adc channels mean the signals that were actually measured by the
-    instrument, for example, current, voltage, auxiliary inputs, etc."""
+    """adc (analog-to-digital-converter) channels mean the signals that
+    were actually measured by the instrument, for example, current, voltage,
+    auxiliary inputs, etc."""
 
     infos: list[ChannelInfo] = []
 
@@ -64,8 +65,9 @@ def _get_adc_channels(abf: pyabf.ABF) -> Sequence[ChannelInfo]:
 
 
 def _get_dac_channels(abf: pyabf.ABF) -> Sequence[ChannelInfo]:
-    """dac is what the amplifier outputs, not what it measures, for example, command
-    voltage, injected currents, stimulus waveforms, etc."""
+    """dac (digital-to-analog-converter) is what the amplifier outputs,
+    not what it measures, for example, command voltage, injected currents,
+    stimulus waveforms, etc."""
 
     infos: list[ChannelInfo] = []
 
@@ -78,3 +80,31 @@ def _get_dac_channels(abf: pyabf.ABF) -> Sequence[ChannelInfo]:
         )
 
     return infos
+
+
+def _pick_current_channel(
+    adc_infos: Sequence[ChannelInfo], preferred: Optional[int]
+) -> ChannelInfo:
+    """Returns the preferred current channel when the user already knows
+    the current channel. If no channel index is provided, it heurestically
+    selects a channel that has units in ampere (a). If it still cannot find
+    such channel, it just returns the first channe."""
+
+    if not adc_infos:
+        raise ABFLoadError("No ADC channels found.")
+
+    if preferred is not None:
+        if preferred < 0 or preferred >= len(adc_infos):
+            raise ABFLoadError(
+                f"Preferred current_channel={preferred} is out of range."
+            )
+        return adc_infos[preferred]
+
+    # heuristic: pick channel whose name/units look like current (pA/nA/A)
+    currentish_units = {"pa", "na", "ua", "ma", "a"}
+    for ch in adc_infos:
+        if ch.units.strip().lower() in currentish_units:
+            return ch
+
+    # fallback: first channel
+    return adc_infos[0]

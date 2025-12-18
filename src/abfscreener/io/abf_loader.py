@@ -135,3 +135,76 @@ def _pick_command_channel(
 
     # fallback: first channel
     return dac_infos[0]
+
+
+def load_abf(
+    path: str | Path,
+    *,
+    current_channel: Optional[int] = None,
+    command_channel: Optional[int] = None,
+) -> ABFSession:
+    """
+    Load an ABF file and return an ABFSession with selected channels.
+
+    Parameters
+    ----------
+    path:
+        Path to .abf file
+    current_channel:
+        ADC index for current. If None, inferred by units/name.
+    command_channel:
+        DAC index for command voltage. If None, inferred; may end up None if not present.
+
+    Returns
+    -------
+    ABFSession
+    """
+
+    p = Path(path).expanduser().resolve()
+
+    if not p.exists():
+        raise ABFLoadError(f"ABF file not found: {p}")
+    if p.suffix.lower() != ".abf":
+        raise ABFLoadError(f"Not an .abf file: {p.name}")
+
+    try:
+        abf = pyabf.ABF(str(p))
+    except Exception as e:
+        raise ABFLoadError(f"Failed to load ABF: {p.name} ({e})") from e
+
+    adc_infos = _get_adc_channels(abf)
+    dac_infos = _get_dac_channels(abf)
+
+    cur = _pick_current_channel(adc_infos, current_channel)
+    cmd = _pick_command_channel(dac_infos, command_channel)
+
+    meta = {
+        "abfVersion": getattr(abf, "abfVersionString", None)
+        or getattr(abf, "abfVersion", None),
+        "protocol": getattr(abf, "protocol", None),
+        "fileGUID": getattr(abf, "fileGUID", None),
+        "creator": getattr(abf, "creator", None),
+        "comments": getattr(abf, "comments", None),
+        "adcNames": [c.name for c in adc_infos],
+        "adcUnits": [c.units for c in adc_infos],
+        "dacNames": [c.name for c in dac_infos],
+        "dacUnits": [c.units for c in dac_infos],
+    }
+
+    sample_rate_hz = float(getattr(abf, "dataRate", None) or 0.0)
+    sweep_count = int(getattr(abf, "sweepCount", None) or 0)
+
+    if sample_rate_hz <= 0:
+        raise ABFLoadError("Invalid sample rate in ABF.")
+    if sweep_count <= 0:
+        raise ABFLoadError("ABF has zero sweeps (nothing to analyze).")
+
+    return ABFSession(
+        path=p,
+        abf=abf,
+        sample_rate_hz=sample_rate_hz,
+        sweep_count=sweep_count,
+        current_channel=cur,
+        command_channel=cmd,
+        meta=meta,
+    )

@@ -10,3 +10,11 @@ from .abf_loader import ABFSession
 
 class SweepIndexError(RuntimeError):
     """Raised when sweeps or epochs cannot be indexed reliably."""
+
+
+@dataclass(frozen=True)
+class SweepData:
+    sweep_index: int
+    t: np.ndarray
+    i: np.ndarray
+    v_cmd: Optional[np.ndarray]

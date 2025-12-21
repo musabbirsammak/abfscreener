@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
+import numpy as np
 import pyabf
 from utils.strings import _safe_str
 
@@ -159,7 +160,6 @@ def load_abf(
     -------
     ABFSession
     """
-
     p = Path(path).expanduser().resolve()
 
     if not p.exists():
@@ -178,6 +178,7 @@ def load_abf(
     cur = _pick_current_channel(adc_infos, current_channel)
     cmd = _pick_command_channel(dac_infos, command_channel)
 
+    # Basic metadata you’ll likely want later
     meta = {
         "abfVersion": getattr(abf, "abfVersionString", None)
         or getattr(abf, "abfVersion", None),
@@ -191,6 +192,7 @@ def load_abf(
         "dacUnits": [c.units for c in dac_infos],
     }
 
+    # sampleRate is in Hz in pyabf (abf.dataRate)
     sample_rate_hz = float(getattr(abf, "dataRate", None) or 0.0)
     sweep_count = int(getattr(abf, "sweepCount", None) or 0)
 
@@ -208,3 +210,51 @@ def load_abf(
         command_channel=cmd,
         meta=meta,
     )
+
+
+def infer_voltage_levels(
+    session: ABFSession,
+    *,
+    channel_index: int,
+    decimals: int = 1,
+    max_samples_per_sweep: int | None = None,
+) -> list[float]:
+    """
+    Infer unique voltage levels across all sweeps by scanning a voltage channel.
+
+    Parameters
+    ----------
+    session:
+        Loaded ABFSession
+    channel_index:
+        ADC channel index corresponding to voltage
+    decimals:
+        Decimal places used when rounding values to suppress noise.
+        Patch clamp voltage traces are never perfectly flat. Instead of
+        -80.0123, it rounds to -80.0 mV. Without rounding every fluctuation
+        becomes a new level and you will have many unique levels.
+    max_samples_per_sweep:
+        Optional downsampling for speed (screening use). ABF files can be huge.
+        50 kHz sampling, 10s sweeps, and 100+ sweeps will result in 5,00,000
+        samples. If voltage plateaus are flat, not all these samples are needed.
+        However, if downsampled, you might miss very short transients,  but should
+        not miss stable protocol levels.
+
+    Returns
+    -------
+    Sorted list of inferred voltage levels
+    """
+    abf = session.abf
+    levels: set[float] = set()
+
+    for s in range(session.sweep_count):
+        abf.setSweep(sweepNumber=s, channel=channel_index)
+        v = np.asarray(abf.sweepY, dtype=float)
+
+        if max_samples_per_sweep and v.size > max_samples_per_sweep:
+            idx = np.linspace(0, v.size - 1, max_samples_per_sweep).astype(int)
+            v = v[idx]
+
+        levels.update(np.round(v, decimals).tolist())
+
+    return sorted(levels)

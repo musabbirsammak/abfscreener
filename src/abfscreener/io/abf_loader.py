@@ -6,7 +6,8 @@ from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 import pyabf
-from utils.strings import _safe_str
+
+from abfscreener.utils.strings import _safe_str
 
 
 class ABFLoadError(RuntimeError):
